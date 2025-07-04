@@ -48,6 +48,27 @@ pub fn parse_pem_string(data: String) -> Result<Vec<Vec<u8>>, CscaError> {
     Ok(certificates.into_iter().map(|cert| cert.der_data().to_vec()).collect())
 }
 
+/// Find the master certificate for a given slave certificate
+/// Returns the DER data of the master certificate if found
+#[uniffi::export]
+pub fn find_master_certificate(slave_cert_der: Vec<u8>, master_certs_der: Vec<Vec<u8>>) -> Result<Option<Vec<u8>>, CscaError> {
+    let slave_cert = OwnedCertificate::from_der(slave_cert_der)?;
+
+    // Convert master certificate DER data to OwnedCertificate objects
+    let mut master_certs = Vec::new();
+    for master_der in master_certs_der {
+        match OwnedCertificate::from_der(master_der) {
+            Ok(cert) => master_certs.push(cert),
+            Err(_) => continue, // Skip invalid certificates
+        }
+    }
+
+    // Find the master certificate
+    let master_cert = slave_cert.find_master_certificate(&master_certs)?;
+
+    Ok(master_cert.map(|cert| cert.der_data().to_vec()))
+}
+
 // Keep the original convenience functions for backwards compatibility
 /// Parse LDIF bytes and return a list of owned certificates
 pub fn parse_ldif_original(data: &[u8]) -> Result<Vec<OwnedCertificate>, CscaError> {
