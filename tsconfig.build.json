@@ -1,4 +1,14 @@
 {
   "extends": "./tsconfig",
-  "exclude": ["example", "lib"]
+  "exclude": [
+    "example",
+    "lib",
+    "**/node_modules",
+    "**/generated",
+    "**/dist",
+    "**/build",
+    "**/coverage",
+    "**/cjs",
+    "**/esm"
+  ]
 }
