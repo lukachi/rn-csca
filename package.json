@@ -17,6 +17,7 @@
     "lib",
     "android",
     "ios",
+    "RnCscaFramework.xcframework",
     "cpp",
     "*.podspec",
     "react-native.config.js",

@@ -10740,10 +10740,11 @@ __metadata:
     react-native: 0.79.2
     react-native-builder-bob: ^0.40.12
     react-native-monorepo-config: ^0.1.9
+    rn-csca: "workspace:*"
   languageName: unknown
   linkType: soft
 
-"rn-csca@workspace:.":
+"rn-csca@workspace:*, rn-csca@workspace:.":
   version: 0.0.0-use.local
   resolution: "rn-csca@workspace:."
   dependencies:

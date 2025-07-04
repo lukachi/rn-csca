@@ -88,3 +88,6 @@ nitrogen/
 # From uniffi-bindgen-react-native
 *.a
 rust_modules/**/target/
+
+*.xcframework
+**/jniLibs/

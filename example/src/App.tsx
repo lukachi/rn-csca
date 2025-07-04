@@ -1,12 +1,12 @@
 import { Text, View, StyleSheet } from 'react-native';
-import { multiply } from 'rn-csca';
+import { csca_parser } from 'rn-csca';
 
-const result = multiply(3, 7);
+console.log({ csca_parser });
 
 export default function App() {
   return (
     <View style={styles.container}>
-      <Text>Result: {result}</Text>
+      <Text>Result: {''}</Text>
     </View>
   );
 }
