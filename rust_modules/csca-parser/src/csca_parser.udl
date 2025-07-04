@@ -1,0 +1,27 @@
+namespace csca_parser {
+    [Throws=CscaError]
+    sequence<bytes> parse_ldif(bytes data);
+    
+    [Throws=CscaError]
+    sequence<bytes> parse_ldif_string(string data);
+    
+    [Throws=CscaError]
+    sequence<bytes> parse_pem(bytes data);
+    
+    [Throws=CscaError]
+    sequence<bytes> parse_pem_string(string data);
+};
+
+[Error]
+enum CscaError {
+    "LdifParseError",
+    "CertificateError",
+    "InvalidFormat",
+    "NoCertificatesFound",
+    "Base64Error",
+    "Utf8Error",
+    "Asn1Error",
+    "DerError",
+    "X509Error",
+    "PemError",
+};
