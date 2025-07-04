@@ -1,0 +1,3 @@
+rust:
+  directory: "./rust_modules/csca-parser"
+  manifestPath: "Cargo.toml"

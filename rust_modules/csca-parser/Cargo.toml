@@ -6,7 +6,7 @@ edition = "2021"
 [lib]
 name = "csca_parser"
 path = "src/lib.rs"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "staticlib", "lib"]
 
 [dependencies]
 x509-parser = "0.15"
