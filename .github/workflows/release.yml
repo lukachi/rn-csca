@@ -1,0 +1,60 @@
+name: New Lib Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-type:
+        type: choice
+        description: 'Release type (one of): patch, minor, major'
+        required: true
+        default: 'patch'
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  release:
+    name: Create New Version and push new tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.package_version.outputs.version }}
+    steps:
+      - name: 🔍 GH_TOKEN
+        if: env.GH_TOKEN == ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "GH_TOKEN=${GITHUB_TOKEN}" >> $GITHUB_ENV
+
+      - name: 📦 Checkout project repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: 📝 Git User Setup
+        run: |
+          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git config --global user.name "${GITHUB_ACTOR}[bot]"
+
+      - name: 📝 NPM User Setup
+        run: |
+          npm config set '//registry.npmjs.org/:_authToken' $NPM_TOKEN
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: 📦 Setup Node + YARN + install deps
+        uses: ./.github/actions/setup
+        env:
+          RELEASE_TYPE: ${{ github.event.inputs.release-type }}
+        run: echo "RELEASE_TYPE=\"$RELEASE_TYPE\"" >> $GITHUB_ENV
+
+      - name: 🏃‍♂️ Run Lib release
+        run: |
+          yarn release --ci --increment $RELEASE_TYPE
+        env:
+          RELEASE_TYPE: ${{ github.event.inputs.release-type }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

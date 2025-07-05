@@ -1,5 +1,5 @@
 import { Text, View, StyleSheet } from 'react-native';
-import { csca_parser } from 'rn-csca';
+import { csca_parser } from '@lukachi/rn-csca';
 
 console.log({ csca_parser });
 

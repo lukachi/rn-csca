@@ -1,5 +1,5 @@
 {
-  "name": "rn-csca",
+  "name": "@lukachi/rn-csca",
   "version": "0.1.0",
   "description": "Interact with ldif and pem CSCAs",
   "main": "./lib/module/index.js",
@@ -111,6 +111,9 @@
     ]
   },
   "release-it": {
+    "hooks": {
+      "before:init": "yarn ubrn:ios --release && yarn ubrn:android --release"
+    },
     "git": {
       "commitMessage": "chore: release ${version}",
       "tagName": "v${version}"

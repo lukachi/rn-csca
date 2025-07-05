@@ -10,9 +10,9 @@
     "build:ios": "react-native build-ios --mode Debug"
   },
   "dependencies": {
+    "@lukachi/rn-csca": "workspace:*",
     "react": "19.0.0",
-    "react-native": "0.79.2",
-    "rn-csca": "workspace:*"
+    "react-native": "0.79.2"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
