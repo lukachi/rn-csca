@@ -1,0 +1,68 @@
+name: Setup Rust
+description: Setup Rust toolchain and cross-compilation targets
+
+inputs:
+  platform:
+    description: 'Target platform (android, ios, or both)'
+    required: true
+    default: 'both'
+  cache-key-suffix:
+    description: 'Additional suffix for cache key'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+
+    - name: Cache Rust dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+          rust_modules/csca-parser/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}${{ inputs.cache-key-suffix }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          ${{ runner.os }}-cargo-
+
+    - name: Install Android NDK
+      if: inputs.platform == 'android' || inputs.platform == 'both'
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+
+    - name: Add Rust Android targets
+      if: inputs.platform == 'android' || inputs.platform == 'both'
+      run: |
+        rustup target add aarch64-linux-android
+        rustup target add armv7-linux-androideabi
+        rustup target add x86_64-linux-android
+        rustup target add i686-linux-android
+      shell: bash
+
+    - name: Add Rust iOS targets
+      if: inputs.platform == 'ios' || inputs.platform == 'both'
+      run: |
+        rustup target add aarch64-apple-ios
+        rustup target add x86_64-apple-ios
+        rustup target add aarch64-apple-ios-sim
+      shell: bash
+
+    - name: Install cargo-ndk (for Android builds)
+      if: inputs.platform == 'android' || inputs.platform == 'both'
+      run: cargo install cargo-ndk
+      shell: bash
+
+    - name: Verify Rust installation
+      run: |
+        rustc --version
+        cargo --version
+        rustup show
+      shell: bash
