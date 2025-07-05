@@ -14,7 +14,7 @@ class RnCscaModule(reactContext: ReactApplicationContext) :
   }
 
   // Two native methods implemented in cpp-adapter.cpp, and ultimately
-  // rn-csca.cpp
+  // lukachi-rn-csca.cpp
 
   external fun nativeInstallRustCrate(runtimePointer: Long, callInvoker: CallInvokerHolder): Boolean
   external fun nativeCleanupRustCrate(runtimePointer: Long): Boolean
@@ -37,7 +37,7 @@ class RnCscaModule(reactContext: ReactApplicationContext) :
     const val NAME = "RnCsca"
 
     init {
-      System.loadLibrary("rn-csca")
+      System.loadLibrary("lukachi-rn-csca")
     }
   }
 }

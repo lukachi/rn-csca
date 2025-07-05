@@ -2,16 +2,16 @@
 #include <jni.h>
 #include <jsi/jsi.h>
 #include <ReactCommon/CallInvokerHolder.h>
-#include "rn-csca.h"
+#include "lukachi-rn-csca.h"
 
 namespace jsi = facebook::jsi;
 namespace react = facebook::react;
 
-// Automated testing checks Java_com_rncsca_RnCscaModule and rncsca
+// Automated testing checks Java_com_rncsca_RnCscaModule and lukachi_rncsca
 // by comparing the whole line here.
 /*
 Java_com_rncsca_RnCscaModule_nativeMultiply(JNIEnv *env, jclass type, jdouble a, jdouble b) {
-    return rncsca::multiply(a, b);
+    return lukachi_rncsca::multiply(a, b);
 }
 */
 
@@ -52,12 +52,12 @@ Java_com_rncsca_RnCscaModule_nativeInstallRustCrate(
     auto jsCallInvoker = nativePointer->getCallInvoker();
 
     auto runtime = reinterpret_cast<jsi::Runtime *>(rtPtr);
-    return rncsca::installRustCrate(*runtime, jsCallInvoker);
+    return lukachi_rncsca::installRustCrate(*runtime, jsCallInvoker);
 }
 
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_rncsca_RnCscaModule_nativeCleanupRustCrate(JNIEnv *env, jclass type, jlong rtPtr) {
     auto runtime = reinterpret_cast<jsi::Runtime *>(rtPtr);
-    return rncsca::cleanupRustCrate(*runtime);
+    return lukachi_rncsca::cleanupRustCrate(*runtime);
 }

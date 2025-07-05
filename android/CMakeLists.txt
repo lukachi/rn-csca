@@ -23,8 +23,8 @@ include_directories(
     ${UNIFFI_BINDGEN_PATH}/cpp/includes
 )
 
-add_library(rn-csca            SHARED
-    ../cpp/rn-csca.cpp
+add_library(lukachi-rn-csca            SHARED
+    ../cpp/lukachi-rn-csca.cpp
     ../cpp/generated/csca_parser.cpp
     cpp-adapter.cpp
 )
@@ -58,9 +58,9 @@ endif()
 # https://github.com/react-native-community/discussions-and-proposals/discussions/816
 # This if-then-else can be removed once this library does not support version below 0.76
 if (REACTNATIVE_MERGED_SO)
-  target_link_libraries(rn-csca ReactAndroid::reactnative)
+  target_link_libraries(lukachi-rn-csca ReactAndroid::reactnative)
 else()
-  target_link_libraries(rn-csca
+  target_link_libraries(lukachi-rn-csca
     ReactAndroid::turbomodulejsijni
     ReactAndroid::react_nativemodule_core
   )
@@ -68,7 +68,7 @@ endif()
 
 find_package(fbjni REQUIRED CONFIG)
 target_link_libraries(
-  rn-csca
+  lukachi-rn-csca
   fbjni::fbjni
   ReactAndroid::jsi
   ${LOGCAT}
