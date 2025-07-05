@@ -1654,7 +1654,7 @@ PODS:
     - React-logger (= 0.79.2)
     - React-perflogger (= 0.79.2)
     - React-utils (= 0.79.2)
-  - RnCsca (0.1.0):
+  - RnCsca (0.1.1):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -1979,11 +1979,11 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: d5dcc564f129632276bd3184e60f053fcd574d6b
   ReactCodegen: fda99a79c866370190e162083a35602fdc314e5d
   ReactCommon: 4d0da92a5eb8da86c08e3ec34bd23ab439fb2461
-  RnCsca: 5cf47bdf1bc1093563f3f5bb2248f084b57e9543
+  RnCsca: 5065ea5a77346744dd0e382a19336f6b337cbb13
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   uniffi-bindgen-react-native: 89b861f6865083493ec6252a8409053db6d77d2d
-  Yoga: c758bfb934100bb4bf9cbaccb52557cee35e8bdf
+  Yoga: 9f110fc4b7aa538663cba3c14cbb1c335f43c13f
 
 PODFILE CHECKSUM: 728ececd2db97a9a5e6ce70c59a648985be76c51
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.15.2

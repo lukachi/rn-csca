@@ -2,6 +2,7 @@ rust:
   directory: "./rust_modules/csca-parser"
   manifestPath: "Cargo.toml"
 ios:
+  frameworkName: Frameworks/RnCSCA
   target:
     - aarch64-apple-darwin
     - aarch64-apple-ios

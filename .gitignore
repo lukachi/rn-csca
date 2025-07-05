@@ -82,6 +82,7 @@ android/keystores/debug.keystore
 lib/
 
 # React Native Codegen
+Frameworks
 ios/generated
 android/generated
 
@@ -92,5 +93,4 @@ nitrogen/
 *.a
 rust_modules/**/target/
 
-*.xcframework
-**/jniLibs/
+**/jniLibs/*.a
