@@ -186,13 +186,19 @@ impl LdifParser {
                 // Decode base64
                 let decoded = general_purpose::STANDARD.decode(clean_base64.trim())?;
 
+                // println!("Decoded length: {}", decoded.len());
+                // println!(
+                //     "First 32 bytes: {:?}",
+                //     &decoded[..std::cmp::min(32, decoded.len())]
+                // );
+
                 // Parse this PKD entry as a master list
                 match self.parse_pkd_entry(&decoded) {
                     Ok(master_list) => {
                         master_lists.push(master_list);
                     }
                     Err(e) => {
-                        eprintln!("Warning: Failed to parse PKD entry: {}", e);
+                        eprintln!("Warning: Failed to parse PKD entry: {} {}", e, clean_base64);
                     }
                 }
             }
@@ -216,6 +222,26 @@ impl LdifParser {
     }
 
     fn parse_pkd_entry(&self, data: &[u8]) -> Result<CscaMasterList, CscaError> {
+        // Try to parse as strict DER first
+        match self.parse_pkd_entry_der(data) {
+            Ok(master_list) => Ok(master_list),
+            Err(der_error) => {
+                // If DER parsing fails, try BER parsing as fallback
+                match self.parse_pkd_entry_ber(data) {
+                    Ok(master_list) => Ok(master_list),
+                    Err(ber_error) => {
+                        // If both fail, return the original DER error
+                        Err(CscaError::DerError(format!(
+                            "Failed to parse PKD entry as both DER and BER. DER error: {}. BER error: {}",
+                            der_error, ber_error
+                        )))
+                    }
+                }
+            }
+        }
+    }
+
+    fn parse_pkd_entry_der(&self, data: &[u8]) -> Result<CscaMasterList, CscaError> {
         // Parse the ContentInfo structure
         let content_info = ContentInfo::from_der(data)
             .map_err(|e| CscaError::DerError(format!("Failed to parse ContentInfo: {}", e)))?;
@@ -245,6 +271,57 @@ impl LdifParser {
                 "No encapsulated content found in SignedData".to_string(),
             ))
         }
+    }
+
+    fn parse_pkd_entry_ber(&self, data: &[u8]) -> Result<CscaMasterList, CscaError> {
+        // For BER encoded data, we need to manually parse the structure
+        // This is a simplified approach that looks for certificates directly in the data
+        use ::der_parser::ber::parse_ber_sequence;
+
+        // Try to parse the top-level sequence
+        match parse_ber_sequence(data) {
+            Ok((_, _)) => {
+                // Look for embedded certificates in the parsed structure
+                let master_list = self.extract_certificates_from_ber_data(data)?;
+                Ok(master_list)
+            }
+            Err(e) => {
+                Err(CscaError::DerError(format!("Failed to parse BER sequence: {}", e)))
+            }
+        }
+    }
+
+    fn extract_certificates_from_ber_data(&self, data: &[u8]) -> Result<CscaMasterList, CscaError> {
+        // Scan through the data looking for certificate patterns
+        let mut cert_list = Vec::new();
+        let mut pos = 0;
+        let version = 0i32; // Default version
+
+        while pos < data.len() {
+            if pos + 4 < data.len() && data[pos] == 0x30 {
+                // Found a potential certificate (SEQUENCE)
+                if let Some(cert_der) = self.extract_certificate_at_position(data, pos) {
+                    // Validate it's actually a certificate
+                    if let Ok((_, _)) = X509Certificate::from_der(&cert_der) {
+                        let cert_len = cert_der.len();
+                        cert_list.push(cert_der);
+                        pos += cert_len;
+                    } else {
+                        pos += 1;
+                    }
+                } else {
+                    pos += 1;
+                }
+            } else {
+                pos += 1;
+            }
+        }
+
+        if cert_list.is_empty() {
+            return Err(CscaError::NoCertificatesFound);
+        }
+
+        Ok(CscaMasterList { version, cert_list })
     }
 
     fn parse_encap_data_with_asn1(&self, data: &[u8]) -> Result<CscaMasterList, CscaError> {

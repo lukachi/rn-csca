@@ -1,8 +1,10 @@
 pub mod parser;
 pub mod error;
+pub mod treap_tree;
 
 pub use parser::{LdifParser, OwnedCertificate, PemParser};
 pub use error::{CscaError, CertificateError};
+pub use treap_tree::{CertTree, Proof, ITreap};
 
 // UniFFI setup
 uniffi::setup_scaffolding!();
@@ -46,6 +48,27 @@ pub fn parse_pem_string(data: String) -> Result<Vec<Vec<u8>>, CscaError> {
     let parser = PemParser::new();
     let certificates = parser.parse_string(&data)?;
     Ok(certificates.into_iter().map(|cert| cert.der_data().to_vec()).collect())
+}
+
+/// Build a certificate tree from DER certificates and generate inclusion proof
+/// Takes a vector of certificate DER data and a target certificate DER data
+/// Returns an inclusion proof for the target certificate
+#[uniffi::export]
+pub fn build_cert_tree_and_gen_proof(
+    certificates: Vec<Vec<u8>>,
+    target_certificate: Vec<u8>,
+) -> Result<Vec<String>, CscaError> {
+    let cert_tree = CertTree::build_from_der_certificates(certificates)?;
+    let proof = cert_tree.gen_inclusion_proof(&target_certificate)?;
+    Ok(proof.siblings)
+}
+
+/// Build a certificate tree from DER certificates
+/// Takes a vector of certificate DER data and returns the merkle root
+#[uniffi::export]
+pub fn build_cert_tree_root(certificates: Vec<Vec<u8>>) -> Result<Option<String>, CscaError> {
+    let cert_tree = CertTree::build_from_der_certificates(certificates)?;
+    Ok(cert_tree.tree.merkle_root().map(|root| hex::encode(root)))
 }
 
 /// Find the master certificate for a given slave certificate

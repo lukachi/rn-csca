@@ -23,6 +23,15 @@ interface NativeModuleInterface {
     buffer: Uint8Array,
     uniffi_out_err: UniffiRustCallStatus
   ): string;
+  ubrn_uniffi_csca_parser_fn_func_build_cert_tree_and_gen_proof(
+    certificates: Uint8Array,
+    targetCertificate: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_csca_parser_fn_func_build_cert_tree_root(
+    certificates: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
   ubrn_uniffi_csca_parser_fn_func_find_master_certificate(
     slaveCertDer: Uint8Array,
     masterCertsDer: Uint8Array,
@@ -44,6 +53,8 @@ interface NativeModuleInterface {
     data: Uint8Array,
     uniffi_out_err: UniffiRustCallStatus
   ): Uint8Array;
+  ubrn_uniffi_csca_parser_checksum_func_build_cert_tree_and_gen_proof(): number;
+  ubrn_uniffi_csca_parser_checksum_func_build_cert_tree_root(): number;
   ubrn_uniffi_csca_parser_checksum_func_find_master_certificate(): number;
   ubrn_uniffi_csca_parser_checksum_func_parse_ldif(): number;
   ubrn_uniffi_csca_parser_checksum_func_parse_ldif_string(): number;

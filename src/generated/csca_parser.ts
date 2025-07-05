@@ -59,6 +59,53 @@ const uniffiIsDebug =
 // Public interface members begin here.
 
 /**
+ * Build a certificate tree from DER certificates and generate inclusion proof
+ * Takes a vector of certificate DER data and a target certificate DER data
+ * Returns an inclusion proof for the target certificate
+ */
+export function buildCertTreeAndGenProof(
+  certificates: Array<ArrayBuffer>,
+  targetCertificate: ArrayBuffer
+): Array<string> /*throws*/ {
+  return FfiConverterArrayString.lift(
+    uniffiCaller.rustCallWithError(
+      /*liftError:*/ FfiConverterTypeCscaError.lift.bind(
+        FfiConverterTypeCscaError
+      ),
+      /*caller:*/ (callStatus) => {
+        return nativeModule().ubrn_uniffi_csca_parser_fn_func_build_cert_tree_and_gen_proof(
+          FfiConverterArrayArrayBuffer.lower(certificates),
+          FfiConverterArrayBuffer.lower(targetCertificate),
+          callStatus
+        );
+      },
+      /*liftString:*/ FfiConverterString.lift
+    )
+  );
+}
+/**
+ * Build a certificate tree from DER certificates
+ * Takes a vector of certificate DER data and returns the merkle root
+ */
+export function buildCertTreeRoot(
+  certificates: Array<ArrayBuffer>
+): string | undefined /*throws*/ {
+  return FfiConverterOptionalString.lift(
+    uniffiCaller.rustCallWithError(
+      /*liftError:*/ FfiConverterTypeCscaError.lift.bind(
+        FfiConverterTypeCscaError
+      ),
+      /*caller:*/ (callStatus) => {
+        return nativeModule().ubrn_uniffi_csca_parser_fn_func_build_cert_tree_root(
+          FfiConverterArrayArrayBuffer.lower(certificates),
+          callStatus
+        );
+      },
+      /*liftString:*/ FfiConverterString.lift
+    )
+  );
+}
+/**
  * Find the master certificate for a given slave certificate
  * Returns the DER data of the master certificate if found
  */
@@ -511,10 +558,16 @@ const FfiConverterOptionalArrayBuffer = new FfiConverterOptional(
   FfiConverterArrayBuffer
 );
 
+// FfiConverter for string | undefined
+const FfiConverterOptionalString = new FfiConverterOptional(FfiConverterString);
+
 // FfiConverter for Array<ArrayBuffer>
 const FfiConverterArrayArrayBuffer = new FfiConverterArray(
   FfiConverterArrayBuffer
 );
+
+// FfiConverter for Array<string>
+const FfiConverterArrayString = new FfiConverterArray(FfiConverterString);
 
 /**
  * This should be called before anything else.
@@ -536,6 +589,22 @@ function uniffiEnsureInitialized() {
     throw new UniffiInternalError.ContractVersionMismatch(
       scaffoldingContractVersion,
       bindingsContractVersion
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_csca_parser_checksum_func_build_cert_tree_and_gen_proof() !==
+    7611
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_csca_parser_checksum_func_build_cert_tree_and_gen_proof'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_csca_parser_checksum_func_build_cert_tree_root() !==
+    57135
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_csca_parser_checksum_func_build_cert_tree_root'
     );
   }
   if (

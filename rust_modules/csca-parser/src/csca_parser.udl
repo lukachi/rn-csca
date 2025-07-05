@@ -1,15 +1,24 @@
 namespace csca_parser {
     [Throws=CscaError]
     sequence<bytes> parse_ldif(bytes data);
-    
+
     [Throws=CscaError]
     sequence<bytes> parse_ldif_string(string data);
-    
+
     [Throws=CscaError]
     sequence<bytes> parse_pem(bytes data);
-    
+
     [Throws=CscaError]
     sequence<bytes> parse_pem_string(string data);
+
+    [Throws=CscaError]
+    sequence<string> build_cert_tree_and_gen_proof(sequence<bytes> certificates, bytes target_certificate);
+
+    [Throws=CscaError]
+    string? build_cert_tree_root(sequence<bytes> certificates);
+
+    [Throws=CscaError]
+    bytes? find_master_certificate(bytes slave_cert_der, sequence<bytes> master_certs_der);
 };
 
 [Error]

@@ -3,15 +3,15 @@ use std::fs;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Read the LDIF file
-    let data = fs::read("assets/ldif.ldif")?;
-    
+    let data = fs::read("assets/icaopkd-list.ldif")?;
+
     println!("Reading LDIF file with {} bytes", data.len());
-    
+
     // Parse the LDIF file
     match parse_ldif_original(&data) {
         Ok(certificates) => {
             println!("Successfully parsed {} certificates", certificates.len());
-            
+
             // Print info about each certificate
             for (i, cert) in certificates.iter().enumerate().take(5) {
                 match cert.parse() {
@@ -32,6 +32,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Failed to parse LDIF: {}", e);
         }
     }
-    
+
     Ok(())
 }

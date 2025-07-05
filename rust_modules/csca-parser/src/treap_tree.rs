@@ -1,0 +1,444 @@
+use crate::CscaError;
+use sha3::{Digest, Keccak256};
+use std::cmp::Ordering;
+use num_bigint::BigUint;
+use num_traits::Zero;
+use x509_parser::oid_registry::*;
+
+#[derive(Debug, Clone)]
+pub struct TreapNode {
+    pub hash: Vec<u8>,
+    pub priority: u64,
+    pub merkle_hash: Vec<u8>,
+    pub left: Option<Box<TreapNode>>,
+    pub right: Option<Box<TreapNode>>,
+}
+
+impl TreapNode {
+    pub fn new(hash: Vec<u8>, priority: u64) -> Self {
+        Self {
+            merkle_hash: hash.clone(),
+            hash,
+            priority,
+            left: None,
+            right: None,
+        }
+    }
+}
+
+pub trait ITreap {
+    fn remove(&mut self, key: &[u8]);
+    fn insert(&mut self, key: Vec<u8>, priority: u64);
+    fn merkle_path(&self, key: &[u8]) -> Vec<Vec<u8>>;
+    fn merkle_root(&self) -> Option<Vec<u8>>;
+}
+
+#[derive(Debug, Clone)]
+pub struct Treap {
+    root: Option<Box<TreapNode>>,
+}
+
+impl Treap {
+    pub fn new() -> Self {
+        Self { root: None }
+    }    pub fn derive_priority(key: &[u8]) -> u64 {
+        let mut hasher = Keccak256::new();
+        hasher.update(key);
+        let key_hash = hasher.finalize();
+
+        // Convert full hash to big integer, matching Go implementation
+        // priority = keccak256.Hash(key) % (2^64-1)
+        let key_hash_bigint = BigUint::from_bytes_be(&key_hash);
+        let max_u64_minus_1 = BigUint::from(u64::MAX);
+        let priority = key_hash_bigint % max_u64_minus_1;
+
+        // Convert back to u64
+        priority.to_u64_digits().get(0).copied().unwrap_or(0)
+    }
+
+    fn compare_bytes(a: &[u8], b: &[u8]) -> Ordering {
+        a.cmp(b)
+    }
+
+    fn bytes_to_bigint(bytes: &[u8]) -> BigUint {
+        BigUint::from_bytes_be(bytes)
+    }
+
+    fn bigint_to_bytes(value: &BigUint) -> Vec<u8> {
+        if value.is_zero() {
+            return vec![0];
+        }
+        value.to_bytes_be()
+    }
+
+    fn keccak256_hash(a: &[u8], b: &[u8]) -> Vec<u8> {
+        let mut hasher = Keccak256::new();
+        hasher.update(a);
+        hasher.update(b);
+        hasher.finalize().to_vec()
+    }    fn hash(a: Option<&[u8]>, b: Option<&[u8]>) -> Vec<u8> {
+        match (a, b) {
+            (None, None) => vec![],
+            (Some(a), None) => {
+                if a.is_empty() {
+                    vec![]
+                } else {
+                    a.to_vec()
+                }
+            }
+            (None, Some(b)) => {
+                if b.is_empty() {
+                    vec![]
+                } else {
+                    b.to_vec()
+                }
+            }
+            (Some(a), Some(b)) => {
+                if a.is_empty() && b.is_empty() {
+                    return vec![];
+                }
+                if a.is_empty() {
+                    return b.to_vec();
+                }
+                if b.is_empty() {
+                    return a.to_vec();
+                }
+
+                if Self::compare_bytes(a, b) == Ordering::Less {
+                    Self::keccak256_hash(a, b)
+                } else {
+                    Self::keccak256_hash(b, a)
+                }
+            }
+        }
+    }
+
+    fn hash_nodes(a: Option<&TreapNode>, b: Option<&TreapNode>) -> Vec<u8> {
+        let left = a.map(|node| node.merkle_hash.as_slice()).unwrap_or(&[]);
+        let right = b.map(|node| node.merkle_hash.as_slice()).unwrap_or(&[]);
+
+        Self::hash(Some(left), Some(right))
+    }
+
+    fn update_node(node: &mut TreapNode) {
+        let children_hash = Self::hash_nodes(
+            node.left.as_deref(),
+            node.right.as_deref(),
+        );
+
+        // Match Go implementation exactly
+        if children_hash.is_empty() {
+            node.merkle_hash = node.hash.clone();
+        } else {
+            node.merkle_hash = Self::hash(Some(&children_hash), Some(&node.hash));
+        }
+    }
+
+    fn split(root: Option<Box<TreapNode>>, key: &[u8]) -> (Option<Box<TreapNode>>, Option<Box<TreapNode>>) {
+        if root.is_none() {
+            return (None, None);
+        }
+
+        let mut root = root.unwrap();
+
+        // Matches Go implementation: bytes.Compare(root.Hash, key) <= 0
+        if Self::compare_bytes(&root.hash, key) != Ordering::Greater {
+            let (left, right) = Self::split(root.right.take(), key);
+            root.right = left;
+            Self::update_node(&mut root);
+            (Some(root), right)
+        } else {
+            let (left, right) = Self::split(root.left.take(), key);
+            root.left = right;
+            Self::update_node(&mut root);
+            (left, Some(root))
+        }
+    }
+
+    fn merge(left: Option<Box<TreapNode>>, right: Option<Box<TreapNode>>) -> Option<Box<TreapNode>> {
+        match (left, right) {
+            (None, right) => right,
+            (left, None) => left,
+            (Some(mut left), Some(mut right)) => {
+                if left.priority > right.priority {
+                    left.right = Self::merge(left.right.take(), Some(right));
+                    Self::update_node(&mut left);
+                    Some(left)
+                } else {
+                    right.left = Self::merge(Some(left), right.left.take());
+                    Self::update_node(&mut right);
+                    Some(right)
+                }
+            }
+        }
+    }
+}
+
+impl ITreap for Treap {
+    fn remove(&mut self, key: &[u8]) {
+        if self.root.is_none() {
+            return;
+        }
+
+        // Split the tree by key-1 => target key in the right subtree
+        // Split the subtree by key => target key is one left node
+        let key_big = Self::bytes_to_bigint(key);
+
+        // Handle the case where key is zero (can't subtract 1)
+        if key_big.is_zero() {
+            let (_, right_after_split) = Self::split(self.root.take(), key);
+            self.root = right_after_split;
+            return;
+        }
+
+        let key_sub1 = Self::bigint_to_bytes(&(&key_big - BigUint::from(1u32)));
+
+        let (left, right) = Self::split(self.root.take(), &key_sub1);
+        if right.is_none() {
+            self.root = left;
+            return;
+        }
+
+        let (_, right_after_split) = Self::split(right, key);
+        self.root = Self::merge(left, right_after_split);
+    }
+
+    fn insert(&mut self, key: Vec<u8>, priority: u64) {
+        let middle = Box::new(TreapNode::new(key.clone(), priority));
+
+        if self.root.is_none() {
+            self.root = Some(middle);
+            return;
+        }
+
+        let (left, right) = Self::split(self.root.take(), &key);
+        self.root = Self::merge(Self::merge(left, Some(middle)), right);
+    }
+
+    fn merkle_path(&self, key: &[u8]) -> Vec<Vec<u8>> {
+        let mut node = self.root.as_ref();
+        let mut result = Vec::new();
+
+        while let Some(current) = node {
+            match Self::compare_bytes(&current.hash, key) {
+                Ordering::Equal => {
+                    // Found the key, add the children hash if it exists
+                    let hashed_nodes = Self::hash_nodes(
+                        current.left.as_deref(),
+                        current.right.as_deref(),
+                    );
+                    if !hashed_nodes.is_empty() {
+                        result.push(hashed_nodes);
+                    }
+                    // Reverse the result to match Go implementation
+                    result.reverse();
+                    return result;
+                }
+                Ordering::Greater => {
+                    // current.hash > key, so we go left
+                    // Add current hash and right sibling (if exists)
+                    result.push(current.hash.clone());
+                    if let Some(right) = &current.right {
+                        result.push(right.merkle_hash.clone());
+                    }
+                    node = current.left.as_ref();
+                }
+                Ordering::Less => {
+                    // current.hash < key, so we go right
+                    // Add current hash and left sibling (if exists)
+                    result.push(current.hash.clone());
+                    if let Some(left) = &current.left {
+                        result.push(left.merkle_hash.clone());
+                    }
+                    node = current.right.as_ref();
+                }
+            }
+        }
+
+        // Return empty vector if key not found
+        vec![]
+    }
+
+    fn merkle_root(&self) -> Option<Vec<u8>> {
+        self.root.as_ref().map(|node| node.merkle_hash.clone())
+    }
+}
+
+/// Proof structure matching the TypeScript implementation
+#[derive(Debug, Clone)]
+pub struct Proof {
+    pub siblings: Vec<String>,
+}
+
+impl Proof {
+    pub fn new(siblings: Vec<String>) -> Self {
+        Self { siblings }
+    }
+}
+
+/// Certificate tree implementation using Treap
+#[derive(Debug, Clone)]
+pub struct CertTree {
+    pub tree: Treap,
+}
+
+impl CertTree {
+    pub fn new(treap: Treap) -> Self {
+        Self { tree: treap }
+    }
+
+    /// Build a certificate tree from raw certificate DER data
+    pub fn build_from_der_certificates(certificates: Vec<Vec<u8>>) -> Result<Self, CscaError> {
+        let mut treap = Treap::new();
+
+        // Extract public keys from certificates and build the tree
+        for cert_der in certificates {
+            let public_key = Self::extract_raw_public_key(&cert_der)?;
+            let leaf_hash = Self::keccak256(&public_key);
+            treap.insert(leaf_hash.clone(), Treap::derive_priority(&leaf_hash));
+        }
+
+        Ok(Self::new(treap))
+    }
+
+    /// Generate inclusion proof for a certificate
+    pub fn gen_inclusion_proof(&self, certificate_der: &[u8]) -> Result<Proof, CscaError> {
+        let public_key = Self::extract_raw_public_key(certificate_der)?;
+        let cert_hash = Self::keccak256(&public_key);
+        let merkle_path = self.tree.merkle_path(&cert_hash);
+
+        let siblings = merkle_path
+            .into_iter()
+            .map(|hash| hex::encode(hash))
+            .collect();
+
+        Ok(Proof::new(siblings))
+    }
+
+    /// Extract raw public key from DER certificate
+    /// This matches the Go implementation's ExtractPubKeys function
+    fn extract_raw_public_key(cert_der: &[u8]) -> Result<Vec<u8>, CscaError> {
+        use x509_parser::prelude::*;
+
+        let (_, cert) = X509Certificate::from_der(cert_der)
+            .map_err(|e| CscaError::X509Error(format!("Failed to parse certificate: {}", e)))?;
+
+        // Extract the public key matching Go's ExtractPubKeys behavior
+        let public_key_info = cert.public_key();
+
+        // Parse the public key based on algorithm
+        let algorithm_oid = &public_key_info.algorithm.algorithm;
+
+        if algorithm_oid == &OID_PKCS1_RSAENCRYPTION {
+            // RSA: extract the modulus N
+            Self::extract_rsa_modulus(&public_key_info.subject_public_key.data)
+        } else if algorithm_oid == &OID_KEY_TYPE_EC_PUBLIC_KEY {
+            // ECDSA: extract X and Y coordinates
+            Self::extract_ecdsa_coordinates(&public_key_info.subject_public_key.data)
+        } else {
+            // For unsupported algorithms, fall back to using the raw public key data
+            // This should work for most cases
+            Ok(public_key_info.subject_public_key.data.to_vec())
+        }
+    }
+
+    fn extract_rsa_modulus(public_key_data: &[u8]) -> Result<Vec<u8>, CscaError> {
+        // RSA public key is SEQUENCE { n INTEGER, e INTEGER }
+        // We need to parse this and extract the modulus (n)
+
+        // For simplicity, let's use a basic DER parser approach
+        // The structure is: 30 len 02 len_n [n bytes] 02 len_e [e bytes]
+
+        if public_key_data.len() < 10 || public_key_data[0] != 0x30 {
+            return Err(CscaError::X509Error("Invalid RSA public key format".to_string()));
+        }
+
+        // Skip SEQUENCE header
+        let mut offset = 2;
+        if public_key_data[1] & 0x80 != 0 {
+            // Long form length
+            let len_bytes = (public_key_data[1] & 0x7f) as usize;
+            offset += len_bytes;
+        }
+
+        // Parse first INTEGER (modulus)
+        if offset >= public_key_data.len() || public_key_data[offset] != 0x02 {
+            return Err(CscaError::X509Error("Invalid RSA modulus format".to_string()));
+        }
+
+        offset += 1;
+        let modulus_len = public_key_data[offset] as usize;
+        offset += 1;
+
+        if offset + modulus_len > public_key_data.len() {
+            return Err(CscaError::X509Error("RSA modulus length exceeds data".to_string()));
+        }
+
+        let modulus = &public_key_data[offset..offset + modulus_len];
+
+        // Remove leading zero if present (for positive integers)
+        if modulus.len() > 1 && modulus[0] == 0x00 {
+            Ok(modulus[1..].to_vec())
+        } else {
+            Ok(modulus.to_vec())
+        }
+    }
+
+    fn extract_ecdsa_coordinates(public_key_data: &[u8]) -> Result<Vec<u8>, CscaError> {
+        // ECDSA public key is typically an uncompressed point: 0x04 || X || Y
+        if public_key_data.len() < 65 || public_key_data[0] != 0x04 {
+            return Err(CscaError::X509Error("Invalid ECDSA public key format".to_string()));
+        }
+
+        // Skip the 0x04 prefix and return X and Y coordinates concatenated
+        let coordinates = &public_key_data[1..];
+        Ok(coordinates.to_vec())
+    }
+
+    /// Compute Keccak256 hash
+    fn keccak256(data: &[u8]) -> Vec<u8> {
+        let mut hasher = Keccak256::new();
+        hasher.update(data);
+        hasher.finalize().to_vec()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_treap_basic_operations() {
+        let mut treap = Treap::new();
+
+        // Test insert
+        treap.insert(vec![1, 2, 3], 100);
+        treap.insert(vec![4, 5, 6], 200);
+
+        // Test merkle root
+        assert!(treap.merkle_root().is_some());
+
+        // Test merkle path
+        let path = treap.merkle_path(&[1, 2, 3]);
+        assert!(!path.is_empty());
+    }
+
+    #[test]
+    fn test_derive_priority() {
+        let key = vec![1, 2, 3, 4];
+        let priority = Treap::derive_priority(&key);
+        assert!(priority > 0);
+    }
+
+    #[test]
+    fn test_cert_tree_creation() {
+        let _certificates = vec![
+            vec![1, 2, 3], // Mock certificate DER data
+            vec![4, 5, 6], // Mock certificate DER data
+        ];
+
+        // This would fail with real certificate parsing, but shows the structure
+        // let cert_tree = CertTree::build_from_der_certificates(certificates);
+        // assert!(cert_tree.is_ok());
+    }
+}
