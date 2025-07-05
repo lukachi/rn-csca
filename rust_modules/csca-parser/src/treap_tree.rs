@@ -1,9 +1,8 @@
-use crate::CscaError;
+use crate::{CscaError, OwnedCertificate};
 use sha3::{Digest, Keccak256};
 use std::cmp::Ordering;
 use num_bigint::BigUint;
 use num_traits::Zero;
-use x509_parser::oid_registry::*;
 
 #[derive(Debug, Clone)]
 pub struct TreapNode {
@@ -293,7 +292,8 @@ impl CertTree {
 
         // Extract public keys from certificates and build the tree
         for cert_der in certificates {
-            let public_key = Self::extract_raw_public_key(&cert_der)?;
+            let cert = OwnedCertificate::from_der(cert_der)?;
+            let public_key = cert.extract_raw_public_key()?;
             let leaf_hash = Self::keccak256(&public_key);
             treap.insert(leaf_hash.clone(), Treap::derive_priority(&leaf_hash));
         }
@@ -303,7 +303,8 @@ impl CertTree {
 
     /// Generate inclusion proof for a certificate
     pub fn gen_inclusion_proof(&self, certificate_der: &[u8]) -> Result<Proof, CscaError> {
-        let public_key = Self::extract_raw_public_key(certificate_der)?;
+        let cert = OwnedCertificate::from_der(certificate_der.to_vec())?;
+        let public_key = cert.extract_raw_public_key()?;
         let cert_hash = Self::keccak256(&public_key);
         let merkle_path = self.tree.merkle_path(&cert_hash);
 
@@ -313,86 +314,6 @@ impl CertTree {
             .collect();
 
         Ok(Proof::new(siblings))
-    }
-
-    /// Extract raw public key from DER certificate
-    /// This matches the Go implementation's ExtractPubKeys function
-    fn extract_raw_public_key(cert_der: &[u8]) -> Result<Vec<u8>, CscaError> {
-        use x509_parser::prelude::*;
-
-        let (_, cert) = X509Certificate::from_der(cert_der)
-            .map_err(|e| CscaError::X509Error(format!("Failed to parse certificate: {}", e)))?;
-
-        // Extract the public key matching Go's ExtractPubKeys behavior
-        let public_key_info = cert.public_key();
-
-        // Parse the public key based on algorithm
-        let algorithm_oid = &public_key_info.algorithm.algorithm;
-
-        if algorithm_oid == &OID_PKCS1_RSAENCRYPTION {
-            // RSA: extract the modulus N
-            Self::extract_rsa_modulus(&public_key_info.subject_public_key.data)
-        } else if algorithm_oid == &OID_KEY_TYPE_EC_PUBLIC_KEY {
-            // ECDSA: extract X and Y coordinates
-            Self::extract_ecdsa_coordinates(&public_key_info.subject_public_key.data)
-        } else {
-            // For unsupported algorithms, fall back to using the raw public key data
-            // This should work for most cases
-            Ok(public_key_info.subject_public_key.data.to_vec())
-        }
-    }
-
-    fn extract_rsa_modulus(public_key_data: &[u8]) -> Result<Vec<u8>, CscaError> {
-        // RSA public key is SEQUENCE { n INTEGER, e INTEGER }
-        // We need to parse this and extract the modulus (n)
-
-        // For simplicity, let's use a basic DER parser approach
-        // The structure is: 30 len 02 len_n [n bytes] 02 len_e [e bytes]
-
-        if public_key_data.len() < 10 || public_key_data[0] != 0x30 {
-            return Err(CscaError::X509Error("Invalid RSA public key format".to_string()));
-        }
-
-        // Skip SEQUENCE header
-        let mut offset = 2;
-        if public_key_data[1] & 0x80 != 0 {
-            // Long form length
-            let len_bytes = (public_key_data[1] & 0x7f) as usize;
-            offset += len_bytes;
-        }
-
-        // Parse first INTEGER (modulus)
-        if offset >= public_key_data.len() || public_key_data[offset] != 0x02 {
-            return Err(CscaError::X509Error("Invalid RSA modulus format".to_string()));
-        }
-
-        offset += 1;
-        let modulus_len = public_key_data[offset] as usize;
-        offset += 1;
-
-        if offset + modulus_len > public_key_data.len() {
-            return Err(CscaError::X509Error("RSA modulus length exceeds data".to_string()));
-        }
-
-        let modulus = &public_key_data[offset..offset + modulus_len];
-
-        // Remove leading zero if present (for positive integers)
-        if modulus.len() > 1 && modulus[0] == 0x00 {
-            Ok(modulus[1..].to_vec())
-        } else {
-            Ok(modulus.to_vec())
-        }
-    }
-
-    fn extract_ecdsa_coordinates(public_key_data: &[u8]) -> Result<Vec<u8>, CscaError> {
-        // ECDSA public key is typically an uncompressed point: 0x04 || X || Y
-        if public_key_data.len() < 65 || public_key_data[0] != 0x04 {
-            return Err(CscaError::X509Error("Invalid ECDSA public key format".to_string()));
-        }
-
-        // Skip the 0x04 prefix and return X and Y coordinates concatenated
-        let coordinates = &public_key_data[1..];
-        Ok(coordinates.to_vec())
     }
 
     /// Compute Keccak256 hash
