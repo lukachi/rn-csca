@@ -16,7 +16,7 @@ on:
 jobs:
   release:
     name: Create New Version and push new tag
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     permissions:
       contents: write
     outputs:
@@ -50,6 +50,12 @@ jobs:
         env:
           RELEASE_TYPE: ${{ github.event.inputs.release-type }}
         run: echo "RELEASE_TYPE=\"$RELEASE_TYPE\"" >> $GITHUB_ENV
+
+      - name: 🦀 Setup Rust for build
+        uses: ./.github/actions/setup-rust
+        with:
+          platform: both
+          cache-key-suffix: -release
 
       - name: 🏃‍♂️ Run Lib release
         run: |
