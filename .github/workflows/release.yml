@@ -47,9 +47,11 @@ jobs:
 
       - name: 📦 Setup Node + YARN + install deps
         uses: ./.github/actions/setup
+
+      - name: 🔧 Set Release Type Environment Variable
+        run: echo "RELEASE_TYPE=\"$RELEASE_TYPE\"" >> $GITHUB_ENV
         env:
           RELEASE_TYPE: ${{ github.event.inputs.release-type }}
-        run: echo "RELEASE_TYPE=\"$RELEASE_TYPE\"" >> $GITHUB_ENV
 
       - name: 🦀 Setup Rust for build
         uses: ./.github/actions/setup-rust
