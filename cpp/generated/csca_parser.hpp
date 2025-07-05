@@ -28,6 +28,9 @@ protected:
   jsi::Value cpp_uniffi_internal_fn_func_ffi__arraybuffer_to_string(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
+  jsi::Value cpp_uniffi_csca_parser_fn_func_find_master_certificate(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
   jsi::Value cpp_uniffi_csca_parser_fn_func_parse_ldif(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
@@ -39,6 +42,9 @@ protected:
                                                       const jsi::Value *args,
                                                       size_t count);
   jsi::Value cpp_uniffi_csca_parser_fn_func_parse_pem_string(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value cpp_uniffi_csca_parser_checksum_func_find_master_certificate(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_uniffi_csca_parser_checksum_func_parse_ldif(

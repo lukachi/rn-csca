@@ -100,6 +100,9 @@ typedef struct UniffiForeignFutureStructVoid {
 } UniffiForeignFutureStructVoid;
 typedef void (*UniffiForeignFutureCompleteVoid)(
     uint64_t callback_data, UniffiForeignFutureStructVoid result);
+RustBuffer uniffi_csca_parser_fn_func_find_master_certificate(
+    RustBuffer slave_cert_der, RustBuffer master_certs_der,
+    RustCallStatus *uniffi_out_err);
 RustBuffer
 uniffi_csca_parser_fn_func_parse_ldif(RustBuffer data,
                                       RustCallStatus *uniffi_out_err);
@@ -238,6 +241,7 @@ void ffi_csca_parser_rust_future_free_void(
     /*handle*/ uint64_t handle);
 void ffi_csca_parser_rust_future_complete_void(
     /*handle*/ uint64_t handle, RustCallStatus *uniffi_out_err);
+uint16_t uniffi_csca_parser_checksum_func_find_master_certificate();
 uint16_t uniffi_csca_parser_checksum_func_parse_ldif();
 uint16_t uniffi_csca_parser_checksum_func_parse_ldif_string();
 uint16_t uniffi_csca_parser_checksum_func_parse_pem();
@@ -1667,6 +1671,17 @@ NativeCscaParser::NativeCscaParser(
             return this->cpp_uniffi_internal_fn_func_ffi__arraybuffer_to_string(
                 rt, thisVal, args, count);
           });
+  props["ubrn_uniffi_csca_parser_fn_func_find_master_certificate"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "ubrn_uniffi_csca_parser_fn_func_find_master_certificate"),
+          2,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_csca_parser_fn_func_find_master_certificate(
+                rt, thisVal, args, count);
+          });
   props["ubrn_uniffi_csca_parser_fn_func_parse_ldif"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -1710,6 +1725,19 @@ NativeCscaParser::NativeCscaParser(
                  const jsi::Value *args, size_t count) -> jsi::Value {
             return this->cpp_uniffi_csca_parser_fn_func_parse_pem_string(
                 rt, thisVal, args, count);
+          });
+  props["ubrn_uniffi_csca_parser_checksum_func_find_master_certificate"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt,
+              "ubrn_uniffi_csca_parser_checksum_func_find_master_certificate"),
+          0,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_csca_parser_checksum_func_find_master_certificate(
+                    rt, thisVal, args, count);
           });
   props["ubrn_uniffi_csca_parser_checksum_func_parse_ldif"] =
       jsi::Function::createFromHostFunction(
@@ -1834,6 +1862,24 @@ NativeCscaParser::cpp_uniffi_internal_fn_func_ffi__arraybuffer_to_string(
 }
 
 // Methods calling directly into the uniffi generated C API of the Rust crate.
+jsi::Value
+NativeCscaParser::cpp_uniffi_csca_parser_fn_func_find_master_certificate(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  RustCallStatus status =
+      uniffi::csca_parser::Bridging<RustCallStatus>::rustSuccess(rt);
+  auto value = uniffi_csca_parser_fn_func_find_master_certificate(
+      uniffi::csca_parser::Bridging<RustBuffer>::fromJs(rt, callInvoker,
+                                                        args[0]),
+      uniffi::csca_parser::Bridging<RustBuffer>::fromJs(rt, callInvoker,
+                                                        args[1]),
+      &status);
+  uniffi::csca_parser::Bridging<RustCallStatus>::copyIntoJs(
+      rt, callInvoker, status, args[count - 1]);
+
+  return uniffi::csca_parser::Bridging<RustBuffer>::toJs(rt, callInvoker,
+                                                         value);
+}
 jsi::Value NativeCscaParser::cpp_uniffi_csca_parser_fn_func_parse_ldif(
     jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
     size_t count) {
@@ -1893,6 +1939,14 @@ jsi::Value NativeCscaParser::cpp_uniffi_csca_parser_fn_func_parse_pem_string(
 
   return uniffi::csca_parser::Bridging<RustBuffer>::toJs(rt, callInvoker,
                                                          value);
+}
+jsi::Value
+NativeCscaParser::cpp_uniffi_csca_parser_checksum_func_find_master_certificate(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  auto value = uniffi_csca_parser_checksum_func_find_master_certificate();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }
 jsi::Value NativeCscaParser::cpp_uniffi_csca_parser_checksum_func_parse_ldif(
     jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,

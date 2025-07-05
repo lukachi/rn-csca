@@ -35,7 +35,9 @@ import {
   AbstractFfiConverterByteArray,
   FfiConverterArray,
   FfiConverterArrayBuffer,
+  FfiConverterBool,
   FfiConverterInt32,
+  FfiConverterOptional,
   RustBuffer,
   UniffiError,
   UniffiInternalError,
@@ -56,6 +58,30 @@ const uniffiIsDebug =
   false;
 // Public interface members begin here.
 
+/**
+ * Find the master certificate for a given slave certificate
+ * Returns the DER data of the master certificate if found
+ */
+export function findMasterCertificate(
+  slaveCertDer: ArrayBuffer,
+  masterCertsDer: Array<ArrayBuffer>
+): ArrayBuffer | undefined /*throws*/ {
+  return FfiConverterOptionalArrayBuffer.lift(
+    uniffiCaller.rustCallWithError(
+      /*liftError:*/ FfiConverterTypeCscaError.lift.bind(
+        FfiConverterTypeCscaError
+      ),
+      /*caller:*/ (callStatus) => {
+        return nativeModule().ubrn_uniffi_csca_parser_fn_func_find_master_certificate(
+          FfiConverterArrayBuffer.lower(slaveCertDer),
+          FfiConverterArrayArrayBuffer.lower(masterCertsDer),
+          callStatus
+        );
+      },
+      /*liftString:*/ FfiConverterString.lift
+    )
+  );
+}
 /**
  * Parse LDIF bytes and return raw certificate DER data
  * This function returns a vector of raw certificate bytes (DER format)
@@ -480,6 +506,11 @@ const FfiConverterTypeCscaError = (() => {
   return new FfiConverter();
 })();
 
+// FfiConverter for ArrayBuffer | undefined
+const FfiConverterOptionalArrayBuffer = new FfiConverterOptional(
+  FfiConverterArrayBuffer
+);
+
 // FfiConverter for Array<ArrayBuffer>
 const FfiConverterArrayArrayBuffer = new FfiConverterArray(
   FfiConverterArrayBuffer
@@ -505,6 +536,14 @@ function uniffiEnsureInitialized() {
     throw new UniffiInternalError.ContractVersionMismatch(
       scaffoldingContractVersion,
       bindingsContractVersion
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_csca_parser_checksum_func_find_master_certificate() !==
+    38924
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_csca_parser_checksum_func_find_master_certificate'
     );
   }
   if (
