@@ -4,13 +4,10 @@ use cms::content_info::ContentInfo;
 use cms::signed_data::SignedData;
 use der::{Decode, Encode};
 use regex::Regex;
-use std::str;
+use x509_parser::asn1_rs::ToDer;
 use x509_parser::oid_registry::*;
 use x509_parser::prelude::*;
-use rsa::{RsaPublicKey, pkcs1::DecodeRsaPublicKey, traits::PublicKeyParts};
-use p256::ecdsa::VerifyingKey as P256VerifyingKey;
-use p384::ecdsa::VerifyingKey as P384VerifyingKey;
-use elliptic_curve::sec1::ToEncodedPoint;
+use x509_parser::public_key::PublicKey;
 
 // Define the CSCA Master List structure similar to your Go code
 #[derive(Debug)]
@@ -142,106 +139,50 @@ impl OwnedCertificate {
         let cert = self.parse()?;
         let public_key_info = cert.public_key();
 
-        // Parse the public key based on algorithm
-        let algorithm_oid = &public_key_info.algorithm.algorithm;
+        let parsed_public_key = match public_key_info.parsed() {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                return Err(CscaError::X509Error(format!(
+                    "Failed to parse public key: {}",
+                    e
+                )));
+            }
+        };
 
-        if algorithm_oid == &OID_PKCS1_RSAENCRYPTION {
-            // RSA: extract the modulus N using the rsa crate
-            self.extract_rsa_modulus_with_crate(&public_key_info.subject_public_key.data)
-        } else if algorithm_oid == &OID_KEY_TYPE_EC_PUBLIC_KEY {
-            // ECDSA: extract X and Y coordinates using elliptic curve crates
-            self.extract_ecdsa_coordinates_with_crate(&public_key_info.subject_public_key.data)
-        } else {
-            // For unsupported algorithms, fall back to using the raw public key data
-            Ok(public_key_info.subject_public_key.data.to_vec())
+        match parsed_public_key {
+            PublicKey::RSA(rsa_key) => {
+                // Extract RSA modulus
+                Ok(rsa_key
+                    .modulus
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<u8>>())
+            }
+            PublicKey::EC(ec_point) => {
+                // For EC keys, return the raw point data directly
+                // This avoids the type parameter issues with EncodedPoint::from_bytes
+                Ok(ec_point.data().to_vec())
+            }
+            PublicKey::DSA(dsa_key) => {
+                // For DSA, return the raw public key data
+                Ok(dsa_key.to_vec())
+            }
+            PublicKey::GostR3410(gost_key) => {
+                // For GOST R 34.10, return the raw public key data
+                Ok(gost_key.to_vec())
+            }
+            PublicKey::GostR3410_2012(gost_key) => {
+                // For GOST R 34.10-2012, return the raw public key data
+                Ok(gost_key.to_vec())
+            }
+            _ => {
+                // For other public key types, return the raw algorithm identifier and key data
+                let spki = &public_key_info.subject_public_key;
+                spki.to_der_vec_raw().map_err(|e| CscaError::X509Error(format!("Failed to serialize public key: {}", e)))
+            },
         }
     }
-
-    fn extract_rsa_modulus_with_crate(&self, public_key_data: &[u8]) -> Result<Vec<u8>, CscaError> {
-        // Try to parse using the rsa crate first
-        match RsaPublicKey::from_pkcs1_der(public_key_data) {
-            Ok(rsa_key) => {
-                // Get the modulus as bytes (matching Go's key.N.Bytes())
-                let modulus_bytes = rsa_key.n().to_bytes_be();
-                Ok(modulus_bytes)
-            }
-            Err(_) => {
-                // Fall back to manual parsing if the rsa crate fails
-                Self::extract_rsa_modulus_manual(public_key_data)
-            }
-        }
-    }
-
-    fn extract_ecdsa_coordinates_with_crate(&self, public_key_data: &[u8]) -> Result<Vec<u8>, CscaError> {
-        // Try P-256 curve first
-        if let Ok(key) = P256VerifyingKey::from_sec1_bytes(public_key_data) {
-            let point = key.to_encoded_point(false); // uncompressed
-            let coords = point.as_bytes();
-            // Skip the 0x04 prefix and return X || Y
-            if coords.len() >= 65 && coords[0] == 0x04 {
-                return Ok(coords[1..].to_vec());
-            }
-        }
-
-        // Try P-384 curve
-        if let Ok(key) = P384VerifyingKey::from_sec1_bytes(public_key_data) {
-            let point = key.to_encoded_point(false); // uncompressed
-            let coords = point.as_bytes();
-            // Skip the 0x04 prefix and return X || Y
-            if coords.len() >= 97 && coords[0] == 0x04 {
-                return Ok(coords[1..].to_vec());
-            }
-        }
-
-        // Fall back to manual parsing
-        Self::extract_ecdsa_coordinates_manual(public_key_data)
-    }
-
-    fn extract_rsa_modulus_manual(public_key_data: &[u8]) -> Result<Vec<u8>, CscaError> {
-        // RSA public key is SEQUENCE { n INTEGER, e INTEGER }
-        // We need to parse this and extract the modulus (n)
-        use x509_parser::der_parser::der::parse_der_sequence;
-        use x509_parser::der_parser::der::parse_der_integer;
-
-        let (_, seq) = parse_der_sequence(public_key_data)
-            .map_err(|e| CscaError::DerError(format!("Failed to parse RSA public key sequence: {}", e)))?;
-
-        if let x509_parser::der_parser::ber::BerObjectContent::Sequence(ref elements) = seq.content {
-            if elements.len() < 2 {
-                return Err(CscaError::DerError("RSA public key must have at least 2 elements".to_string()));
-            }
-
-            // Parse the first element (modulus)
-            let modulus_obj = &elements[0];
-            let modulus_slice = modulus_obj.as_slice()
-                .map_err(|e| CscaError::DerError(format!("Failed to get modulus bytes: {}", e)))?;
-            let (_, modulus_int) = parse_der_integer(modulus_slice)
-                .map_err(|e| CscaError::DerError(format!("Failed to parse RSA modulus: {}", e)))?;
-
-            // Extract the integer bytes, removing leading zeros
-            let modulus_bytes = modulus_int.as_slice()
-                .map_err(|e| CscaError::DerError(format!("Failed to get modulus slice: {}", e)))?;
-            if modulus_bytes.len() > 1 && modulus_bytes[0] == 0x00 {
-                Ok(modulus_bytes[1..].to_vec())
-            } else {
-                Ok(modulus_bytes.to_vec())
-            }
-        } else {
-            Err(CscaError::DerError("Expected SEQUENCE for RSA public key".to_string()))
-        }
-    }
-
-    fn extract_ecdsa_coordinates_manual(public_key_data: &[u8]) -> Result<Vec<u8>, CscaError> {
-        // ECDSA public key is typically an uncompressed point: 0x04 || X || Y
-        if public_key_data.len() < 65 || public_key_data[0] != 0x04 {
-            return Err(CscaError::X509Error("Invalid ECDSA public key format".to_string()));
-        }
-
-        // Skip the 0x04 prefix and return X and Y coordinates concatenated
-        let coordinates = &public_key_data[1..];
-        Ok(coordinates.to_vec())
-    }
-  }
+}
 
 impl LdifParser {
     pub fn new() -> Self {
@@ -394,9 +335,10 @@ impl LdifParser {
                 let master_list = self.extract_certificates_from_ber_data(data)?;
                 Ok(master_list)
             }
-            Err(e) => {
-                Err(CscaError::DerError(format!("Failed to parse BER sequence: {}", e)))
-            }
+            Err(e) => Err(CscaError::DerError(format!(
+                "Failed to parse BER sequence: {}",
+                e
+            ))),
         }
     }
 

@@ -290,13 +290,18 @@ impl CertTree {
     pub fn build_from_der_certificates(certificates: Vec<Vec<u8>>) -> Result<Self, CscaError> {
         let mut treap = Treap::new();
 
+        let mut counter = 0;
+
         // Extract public keys from certificates and build the tree
         for cert_der in certificates {
             let cert = OwnedCertificate::from_der(cert_der)?;
             let public_key = cert.extract_raw_public_key()?;
             let leaf_hash = Self::keccak256(&public_key);
+            counter += 1;
             treap.insert(leaf_hash.clone(), Treap::derive_priority(&leaf_hash));
         }
+
+        println!("counter: {}", counter);
 
         Ok(Self::new(treap))
     }

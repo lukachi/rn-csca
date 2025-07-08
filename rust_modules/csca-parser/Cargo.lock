@@ -341,6 +341,7 @@ dependencies = [
  "pem",
  "regex",
  "rsa",
+ "sec1",
  "sha2",
  "sha3",
  "spki",

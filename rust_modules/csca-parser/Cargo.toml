@@ -29,6 +29,7 @@ p256 = "0.13"
 p384 = "0.13"
 spki = "0.7"
 elliptic-curve = "0.13"
+sec1 = "0.7"
 
 [build-dependencies]
 uniffi = { version = "0.29", features = ["build"] }
