@@ -149,38 +149,134 @@ impl OwnedCertificate {
             }
         };
 
-        match parsed_public_key {
+        let raw_key = match parsed_public_key {
             PublicKey::RSA(rsa_key) => {
-                // Extract RSA modulus
-                Ok(rsa_key
+                // Extract RSA modulus and normalize it
+                let modulus: Vec<u8> = rsa_key
                     .modulus
                     .iter()
                     .cloned()
-                    .collect::<Vec<u8>>())
+                    .collect::<Vec<u8>>();
+                Self::normalize_key_data(modulus)
             }
             PublicKey::EC(ec_point) => {
-                // For EC keys, return the raw point data directly
-                // This avoids the type parameter issues with EncodedPoint::from_bytes
-                Ok(ec_point.data().to_vec())
+                // For EC keys, extract and normalize the point data
+                let point_data = ec_point.data().to_vec();
+                Self::normalize_ec_point(point_data)
             }
             PublicKey::DSA(dsa_key) => {
-                // For DSA, return the raw public key data
-                Ok(dsa_key.to_vec())
+                // For DSA, normalize the public key data
+                Self::normalize_key_data(dsa_key.to_vec())
             }
             PublicKey::GostR3410(gost_key) => {
-                // For GOST R 34.10, return the raw public key data
-                Ok(gost_key.to_vec())
+                println!("GostR3410 public key found");
+                // For GOST R 34.10, normalize the public key data
+                Self::normalize_key_data(gost_key.to_vec())
             }
             PublicKey::GostR3410_2012(gost_key) => {
-                // For GOST R 34.10-2012, return the raw public key data
-                Ok(gost_key.to_vec())
+                println!("GostR3410-2012 public key found");
+                // For GOST R 34.10-2012, normalize the public key data
+                Self::normalize_key_data(gost_key.to_vec())
             }
             _ => {
-                // For other public key types, return the raw algorithm identifier and key data
+                // For other public key types, get the raw subject public key bits
                 let spki = &public_key_info.subject_public_key;
-                spki.to_der_vec_raw().map_err(|e| CscaError::X509Error(format!("Failed to serialize public key: {}", e)))
+                let raw_bits = spki.to_der_vec_raw()
+                    .map_err(|e| CscaError::X509Error(format!("Failed to serialize public key: {}", e)))?;
+                Self::normalize_key_data(raw_bits)
             },
+        };
+
+        Ok(raw_key)
+    }
+
+    /// Normalize key data by removing common prefixes and padding
+    fn normalize_key_data(mut key_data: Vec<u8>) -> Vec<u8> {
+        // Remove leading zero bytes (padding)
+        while !key_data.is_empty() && key_data[0] == 0x00 {
+            key_data.remove(0);
         }
+
+        // If the key is now empty or too small, return as-is
+        if key_data.len() < 2 {
+            return key_data;
+        }
+
+        // Remove ASN.1 BIT STRING padding indicator if present
+        // BIT STRING starts with 0x03, followed by length, then unused bits count (usually 0x00)
+        if key_data.len() > 2 && key_data[0] == 0x03 {
+            // Skip the BIT STRING tag and length parsing for now
+            // This is a simplified approach - in practice you'd parse the length properly
+            if key_data[2] == 0x00 {
+                // Remove the first 3 bytes (tag, length, unused bits)
+                key_data = key_data[3..].to_vec();
+            }
+        }
+
+        // Remove any additional leading zeros after BIT STRING removal
+        while !key_data.is_empty() && key_data[0] == 0x00 {
+            key_data.remove(0);
+        }
+
+        key_data
+    }
+
+    /// Normalize EC point data by handling various point formats
+    fn normalize_ec_point(mut point_data: Vec<u8>) -> Vec<u8> {
+        // Remove leading zero bytes
+        while !point_data.is_empty() && point_data[0] == 0x00 {
+            point_data.remove(0);
+        }
+
+        if point_data.is_empty() {
+            return point_data;
+        }
+
+        // Handle uncompressed point format (0x04 prefix)
+        if point_data[0] == 0x04 {
+            // Remove the 0x04 prefix for uncompressed points
+            point_data = point_data[1..].to_vec();
+
+            // For uncompressed points, the data is X || Y coordinates
+            // Each coordinate might have leading zeros that need normalization
+            if point_data.len() % 2 == 0 {
+                let coord_len = point_data.len() / 2;
+                let mut x_coord = point_data[..coord_len].to_vec();
+                let mut y_coord = point_data[coord_len..].to_vec();
+
+                // Remove leading zeros from each coordinate
+                while !x_coord.is_empty() && x_coord[0] == 0x00 {
+                    x_coord.remove(0);
+                }
+                while !y_coord.is_empty() && y_coord[0] == 0x00 {
+                    y_coord.remove(0);
+                }
+
+                // Reconstruct the point data
+                let mut normalized = Vec::new();
+                normalized.extend_from_slice(&x_coord);
+                normalized.extend_from_slice(&y_coord);
+                return normalized;
+            }
+        }
+
+        // Handle compressed point formats (0x02, 0x03 prefixes)
+        if point_data[0] == 0x02 || point_data[0] == 0x03 {
+            // For compressed points, remove the compression indicator
+            // and normalize the X coordinate
+            let mut x_coord = point_data[1..].to_vec();
+            while !x_coord.is_empty() && x_coord[0] == 0x00 {
+                x_coord.remove(0);
+            }
+            return x_coord;
+        }
+
+        // If no recognized format, just remove leading zeros
+        while !point_data.is_empty() && point_data[0] == 0x00 {
+            point_data.remove(0);
+        }
+
+        point_data
     }
 }
 
